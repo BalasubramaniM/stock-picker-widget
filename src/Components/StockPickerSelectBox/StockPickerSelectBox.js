@@ -17,11 +17,12 @@ import { getStocksQueryOptions } from "./stockPickerSelectBox.helpers";
 
 function StockPickerSelectBox() {
   const [value, setValue] = useState("");
+  const [stockSymbol, setStockSymbol] = useState(null);
 
   const Placeholder = (props) => <components.Placeholder {...props} />;
 
   const onSearchClick = () => {
-    console.log(true);
+    setStockSymbol(value);
   };
 
   const SearchIcon = useCallback(
@@ -52,6 +53,17 @@ function StockPickerSelectBox() {
     );
   };
 
+  const onChangeSymbol = ({ value: symbol }, actionType) => {
+    setStockSymbol(symbol);
+  };
+
+  const onKeyDown = (e) => {
+    const keyCode = _get(e, "keyCode");
+    if (keyCode === 13) {
+      setStockSymbol(value);
+    }
+  };
+
   const onBlur = () => setValue(value);
   const onKeyPress = _debounce(onInputChange, 300);
 
@@ -67,7 +79,9 @@ function StockPickerSelectBox() {
           }}
           options={options}
           onInputChange={onKeyPress}
+          onChange={onChangeSymbol}
           isLoading={isLoading}
+          onKeyDown={onKeyDown}
           formatOptionLabel={formatOptionLabel}
           // menuIsOpen
           onBlur={onBlur}
@@ -75,7 +89,7 @@ function StockPickerSelectBox() {
         />
         <SearchIcon />
       </div>
-      <StockDetails />
+      <StockDetails symbol={stockSymbol} />
     </div>
   );
 }
