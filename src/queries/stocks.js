@@ -5,7 +5,7 @@ import _defaults from "lodash/defaults";
 
 import { useQuery } from "react-query";
 
-const API_KEY = "FHEG974OQN7RL0D7";
+const API_KEY = "WSZC90K6F45SYHFP";
 const INTERVAL_DURATION = "1min";
 const BASE_URL = "https://www.alphavantage.co/";
 
