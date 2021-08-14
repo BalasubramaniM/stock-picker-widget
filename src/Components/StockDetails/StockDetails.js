@@ -1,10 +1,16 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useReducer, useState, useRef } from "react";
 import cogoToast from "cogo-toast";
 
 import _isNil from "lodash/isNil";
+import _map from "lodash/map";
+import _get from "lodash/get";
+import _isEmpty from "lodash/isEmpty";
+import _findIndex from "lodash/findIndex";
 
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
+
+import Slider from "react-slick";
 
 import {
   useStockDetailQuery,
@@ -14,7 +20,9 @@ import {
 import {
   getStockDetailQueryOptions,
   getStockDetailChartQueryOptions,
-} from "../StockPickerSelectBox/stockPickerSelectBox.helpers";
+} from "../StockPicker/stockPicker.helpers";
+
+import { SLIDER_SETTINGS } from "./stockDetails.constants";
 
 function Content({ name, value }) {
   return (
@@ -25,23 +33,55 @@ function Content({ name, value }) {
   );
 }
 
+function init() {
+  return {
+    allData: [],
+    allCharts: [],
+  };
+}
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "ADD":
+      return {
+        ...state,
+        allData: [...state.allData, action.payload],
+      };
+    case "ADD_CHART":
+      return {
+        ...state,
+        allCharts: [...state.allCharts, action.payload],
+      };
+    default:
+      throw new Error();
+  }
+}
+
 function StockDetails({ symbol }) {
+  const slickEl = useRef(null);
+  const [state, dispatch] = useReducer(reducer, null, init);
   const [intervalDuration, setIntervalDuration] = useState(1);
-  const queryOptions = useMemo(() => getStockDetailQueryOptions(), []);
-  const queryOptionsForChart = useMemo(
+
+  const stockDetailsQueryOptions = useMemo(
+    () => getStockDetailQueryOptions(intervalDuration),
+    [intervalDuration]
+  );
+  const stockDetailsChartQueryOptions = useMemo(
     () => getStockDetailChartQueryOptions(intervalDuration),
     [intervalDuration]
   );
 
-  const { data: chartDetails = {} } = useStockDetailChartQuery(
-    symbol,
-    queryOptionsForChart
-  );
+  const {
+    data: chartDetails = {},
+    isLoading: isChartDetailsLoading,
+    isPreviousData: isChartDetailsPreviousData,
+  } = useStockDetailChartQuery(symbol, stockDetailsChartQueryOptions);
 
-  const { data, isLoading, ...rest } = useStockDetailQuery(
-    symbol,
-    queryOptions
-  );
+  const {
+    data = {},
+    isLoading,
+    isPreviousData,
+  } = useStockDetailQuery(symbol, stockDetailsQueryOptions);
 
   const onChangeInterval = (e) => {
     const value = e.target.value;
@@ -52,26 +92,39 @@ function StockDetails({ symbol }) {
     setIntervalDuration(e.target.value);
   };
 
-  const {
-    Name,
-    Symbol,
-    Description,
-    PriceToBookRatio,
-    RevenuePerShareTTM,
-    Industry,
-    PERatio,
-    MarketCapitalization,
-  } = data || {};
+  useEffect(() => {
+    if (
+      !_isEmpty(data) &&
+      !isLoading &&
+      !isChartDetailsLoading &&
+      !isPreviousData &&
+      !isChartDetailsPreviousData &&
+      !_isEmpty(chartDetails)
+    ) {
+      const dataIndex = _findIndex(
+        state.allData,
+        (d) => d.Symbol === data.Symbol
+      );
+      if (dataIndex >= 0) {
+        slickEl.current.slickGoTo(dataIndex);
+      } else {
+        dispatch({ type: "ADD", payload: data });
+        dispatch({ type: "ADD_CHART", payload: chartDetails });
+      }
+    }
+  }, [
+    data,
+    isPreviousData,
+    isLoading,
+    isChartDetailsLoading,
+    chartDetails,
+    isChartDetailsPreviousData,
+    state,
+    symbol,
+  ]);
 
-  console.log(symbol, chartDetails);
-
-  if (_isNil(chartDetails)) {
-    cogoToast.error("Unable to find Company stock details");
-    return (
-      <div className="flex justify-center items-center flex-col mt-8 mb-8 h-full border overflow-y-auto">
-        Unable to find company details.
-      </div>
-    );
+  if (_isNil(chartDetails) || _isNil(data)) {
+    cogoToast.error("API timeout error or Company profile not found.");
   }
 
   if (_isNil(symbol)) {
@@ -81,6 +134,43 @@ function StockDetails({ symbol }) {
       </div>
     );
   }
+
+  const slides = _map(state.allData, (item, index) => {
+    const {
+      Name,
+      Symbol,
+      Description,
+      PriceToBookRatio,
+      RevenuePerShareTTM,
+      Industry,
+      PERatio,
+      MarketCapitalization,
+    } = item;
+    const currentChartDetails = _get(state, `allCharts.${index}`);
+    return (
+      <div
+        key={Symbol}
+        className="flex flex-col mt-8 mb-8 h-full border overflow-y-auto"
+      >
+        <div>
+          <HighchartsReact
+            highcharts={Highcharts}
+            options={currentChartDetails}
+          />
+        </div>
+        <div className="flex flex-1 flex-col px-4">
+          <Content name="Name" value={Name} />
+          <Content name="Symbol" value={Symbol} />
+          <Content name="PriceToBookRatio" value={PriceToBookRatio} />
+          <Content name="RevenuePerShareTTM" value={RevenuePerShareTTM} />
+          <Content name="Industry" value={Industry} />
+          <Content name="PERatio" value={PERatio} />
+          <Content name="MarketCapitalization" value={MarketCapitalization} />
+          <Content name="Description" value={Description} />
+        </div>
+      </div>
+    );
+  });
 
   return (
     <div>
@@ -96,22 +186,9 @@ function StockDetails({ symbol }) {
           placeholder="in minutes"
         />
       </div>
-      <div className="flex flex-col mt-8 mb-8 h-full border overflow-y-auto">
-        <div>
-          <HighchartsReact highcharts={Highcharts} options={chartDetails} />
-          {/* <div id="chartcontainer"></div> */}
-        </div>
-        <div className="flex flex-1 flex-col px-4">
-          <Content name="Name" value={Name} />
-          <Content name="Symbol" value={Symbol} />
-          <Content name="PriceToBookRatio" value={PriceToBookRatio} />
-          <Content name="RevenuePerShareTTM" value={RevenuePerShareTTM} />
-          <Content name="Industry" value={Industry} />
-          <Content name="PERatio" value={PERatio} />
-          <Content name="MarketCapitalization" value={MarketCapitalization} />
-          <Content name="Description" value={Description} />
-        </div>
-      </div>
+      <Slider ref={slickEl} {...SLIDER_SETTINGS}>
+        {slides}
+      </Slider>
     </div>
   );
 }

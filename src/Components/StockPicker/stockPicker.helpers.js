@@ -10,6 +10,7 @@ import _toNumber from "lodash/toNumber";
 import _reduce from "lodash/reduce";
 import _reverse from "lodash/reverse";
 import _isNil from "lodash/isNil";
+import _isEmpty from "lodash/isEmpty";
 
 const removeNumbers = (obj) =>
   _mapKeys(obj, (_, key) => _join(_slice(key, 3), ""));
@@ -39,30 +40,37 @@ export const getStocksQueryOptions = () => {
   };
 };
 
-export const getStockDetailQueryOptions = () => {
+export const getStockDetailQueryOptions = (intervalDuration) => {
   return {
-    select: (data) => data,
-    refetchInterval: 1000 * 60 * 1, // 1 minute
+    select: (response) => {
+      const errMsg = _get(response, "Error Message", null);
+      const noteMsg = _get(response, "Note", null);
+      if (!_isNil(errMsg) || !_isNil(noteMsg)) {
+        return null;
+      }
+      return response;
+    },
+    refetchInterval: 1000 * 60 * intervalDuration, // 1 minute
+    keepPreviousData: true,
   };
 };
 
 export const getStockDetailChartQueryOptions = (intervalDuration) => {
   return {
     select: (response) => {
-      debugger;
       const errMsg = _get(response, "Error Message", null);
-      if (!_isNil(errMsg)) {
+      const noteMsg = _get(response, "Note", null);
+      if (!_isNil(errMsg) || !_isNil(noteMsg)) {
         return null;
       }
+      if (_isEmpty(response)) return response;
       const timeSeries = _get(response, "Time Series (1min)", {});
-
       const { categories, data } = _reduce(
         timeSeries,
         (acc, value, key) => {
           const { categories, data } = acc;
           const time = _last(_split(key, " "));
           const parsedValue = removeNumbers(value);
-          //   const openValue = _toNumber(parsedValue.open);
 
           return {
             categories: [...categories, time],
@@ -80,14 +88,14 @@ export const getStockDetailChartQueryOptions = (intervalDuration) => {
           text: "My chart",
         },
         series: [
-          //   {
-          //     name: "Open",
-          //     data: _reverse(_map(data, (d) => _toNumber(d.open))),
-          //   },
-          //   {
-          //     name: "Close",
-          //     data: _reverse(_map(data, (d) => _toNumber(d.close))),
-          //   },
+          {
+            name: "Open",
+            data: _reverse(_map(data, (d) => _toNumber(d.open))),
+          },
+          {
+            name: "Close",
+            data: _reverse(_map(data, (d) => _toNumber(d.close))),
+          },
           {
             name: "High",
             data: _reverse(_map(data, (d) => _toNumber(d.high))),
@@ -103,5 +111,6 @@ export const getStockDetailChartQueryOptions = (intervalDuration) => {
       };
     },
     refetchInterval: 1000 * 60 * intervalDuration, // 1 minute
+    keepPreviousData: true,
   };
 };
